@@ -44,21 +44,16 @@ class DataPreparer:
     def segment_tiles(self, geojson, downloaded_scenes):
         for feature in geojson['features']:
             bounding_box = extract_bounding_box(feature)
-            self.find_and_extract_window(bounding_box, downloaded_scenes)
+            self.find_and_extract_window(bounding_box, downloaded_scenes, feature['properties'])
 
 
-    def find_and_extract_window(self, bounding_box, downloaded_scenes):
+    def find_and_extract_window(self, bounding_box, downloaded_scenes, properties):
         for index, scene in enumerate(downloaded_scenes):
             raster = rasterio.open(scene)
-            # bounding_box[0], bounding_box[1] = TRANSFORMER.transform(bounding_box[0], bounding_box[1])
-            # bounding_box[2], bounding_box[3] = TRANSFORMER.transform(bounding_box[2], bounding_box[3])
-            # test = [0, 0, 0, 0]
-            # test[0], test[1] = REVERSE.transform(bounding_box[0], bounding_box[1])
-            # test[2], test[3] = REVERSE.transform(bounding_box[2], bounding_box[3])
 
             if self.check_intersection(raster.bounds, bounding_box):
                 print(raster.bounds, bounding_box)
-                self.extract_window(raster, bounding_box, index)
+                self.extract_window(raster, bounding_box, index, properties)
 
             raster.close()
 
@@ -67,9 +62,11 @@ class DataPreparer:
         return source_bound[0] <= bounding_box[0] and source_bound[1] <= bounding_box[1] and source_bound[2] >= bounding_box[2] and source_bound[3] >= bounding_box[3]
 
 
-    def extract_window(self, raster, bounding_box, index):
+    def extract_window(self, raster, bounding_box, index, properties):
         filename = raster.name.split('/')[-1]
-
+        foldername = f"{self.folder_name}/{properties['domain']}_{properties['date']}"
+        mkdir(foldername)
+        filename = f"{foldername}/{properties['tile_id']}_{filename}"
         crop = raster.read(
                 1,
                 window=from_bounds(*bounding_box, raster.transform)
@@ -82,5 +79,5 @@ class DataPreparer:
             'transform': transform
         })
 
-        with rasterio.open(f"{self.folder_name}/{index}-{filename}", 'w', **profile) as clip:
+        with rasterio.open(filename, 'w', **profile) as clip:
             clip.write(crop, 1)
