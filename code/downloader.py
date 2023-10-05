@@ -8,56 +8,46 @@ from lib.session_with_header_redirection import SessionWithHeaderRedirection
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 
 
-DST_CRS = 'EPSG:4326'
-
-
 class Downloader:
     def __init__(self, username, password):
         self.session = SessionWithHeaderRedirection(username, password)
 
-    def download(self, collection_id, links):
-        downloaded_scenes = list()
+    def download_for(self, collection_id, links, tiles_info, split):
         mkdir(collection_id)
+        downloaded_scenes = list()
         for link in tqdm(links):
-            filename = f"{collection_id}/{link[link.rfind('/')+1:]}"
-            try:
-                updated_filename = filename.replace('.tif', '_4326.tif')
-                if not(os.path.isfile(updated_filename)):
-                    response = self.session.get(link, stream=True)
-                    response.raise_for_status()
-                    with open(filename, 'wb') as fd:
-                        for chunk in response.iter_content(chunk_size=1024*1024):
-                            fd.write(chunk)
-                    self.reproject(filename, updated_filename)
-                    os.remove(filename)
-                downloaded_scenes.append(updated_filename)
-            except Exception as e:
-                print(f"Couldn't download link: {link}, {e}")
+            filename = link[link.rfind('/') + 1 :]
+            file_path = f"{collection_id}/{filename}"
+            tile_id, datetime = filename.split('.')[2:4]
+            date = datetime.split('T')[0]
+            if not ('.2017' in link):
+                print(link)
                 continue
+            else:
+                print(link)
+            if date in tiles_info[split]:
+                # import code
+
+                # code.interact(local=dict(globals(), **locals()))
+
+                for download_id in tiles_info[split][date]:
+                    if download_id in filename:
+                        try:
+                            if not (os.path.isfile(file_path)):
+                                response = self.session.get(link, stream=True)
+                                response.raise_for_status()
+                                with open(file_path, 'wb') as fd:
+                                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                                        fd.write(chunk)
+                            downloaded_scenes.append(
+                                {
+                                    'file_name': file_path,
+                                    'date': date,
+                                    'download_id': download_id,
+                                    'indices': tiles_info[split][date][download_id],
+                                }
+                            )
+                        except Exception as e:
+                            print(f"Couldn't download link: {link}, {e}")
+                            continue
         return downloaded_scenes
-
-
-    def reproject(self, filename, updated_filename):
-        with rasterio.open(filename) as raster:
-            transform, width, height = calculate_default_transform(
-                raster.crs, DST_CRS, raster.width, raster.height, *raster.bounds
-            )
-            kwargs = raster.meta.copy()
-            kwargs.update({
-                'crs': DST_CRS,
-                'transform': transform,
-                'width': width,
-                'height': height
-            })
-
-            with rasterio.open(updated_filename, 'w', **kwargs) as dst:
-                for i in range(1, raster.count + 1):
-                    reproject(
-                        source=rasterio.band(raster, i),
-                        destination=rasterio.band(dst, i),
-                        raster_transform=raster.transform,
-                        raster_crs=raster.crs,
-                        dst_transform=transform,
-                        dst_crs=DST_CRS,
-                        resampling=Resampling.nearest
-                    )
