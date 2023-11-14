@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 from lib.utils import extract_minimum_bounding_box
 
-CMR_URL = "https://cmr.earthdata.nasa.gov/search/granules.umm_json?collection_concept_id={collection_id}&temporal[]={start_datetime}&temporal[]={end_datetime}&page_size=2000"
+CMR_URL = "https://cmr.earthdata.nasa.gov/search/granules.umm_json?collection_concept_id={collection_id}&temporal[]={start_datetime}&temporal[]={end_datetime}&page_size=1000"
 QUERY = ""
 # HLS L30 = C2021957657-LPCLOUD
 # HLS S30 = C2021957295-LPCLOUD
@@ -28,22 +28,30 @@ class CMRConnector:
                     end_datetime=end_datetime,
                 )
             )
-            break
 
     def list_downloadable_links(self):
         # pass json file to download
         # query cmr based on the dates
         downloadable_links = list()
         for cmr_url in self.cmr_urls:
-            response = requests.get(cmr_url)
-            response.raise_for_status()
-
-            for item in response.json()['items']:
-                for url in item['umm']['RelatedUrls']:
-                    if (
-                        ('s3:' not in url['URL'])
-                        and ('.tif' in url['URL'])
-                        # and ('mask' not in url['URL'])
-                    ):
-                        downloadable_links.append(url['URL'])
+            load = True
+            page_num = 1
+            while load:
+                try:
+                    response = requests.get(f"{cmr_url}&page_num={page_num}")
+                    response.raise_for_status()
+                    if not (response.json()['items']):
+                        load = False
+                        continue
+                    for item in response.json()['items']:
+                        for url in item['umm']['RelatedUrls']:
+                            if (
+                                ('s3:' not in url['URL'])
+                                and ('.tif' in url['URL'])
+                                # and ('mask' not in url['URL'])
+                            ):
+                                downloadable_links.append(url['URL'])
+                    page_num += 1
+                except:
+                    load = False
         return downloadable_links
