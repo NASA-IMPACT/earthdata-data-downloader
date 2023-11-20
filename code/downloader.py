@@ -7,6 +7,7 @@ from lib.utils import mkdir
 from lib.session_with_header_redirection import SessionWithHeaderRedirection
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 
+from cmr_connector import warn_log
 
 class Downloader:
     def __init__(self, username, password):
@@ -49,5 +50,6 @@ class Downloader:
                             )
                         except Exception as e:
                             print(f"Couldn't download link: {link}, {e}")
+                            warn_log.error(f"Couldn't download link: {link}, {e}")
                             continue
         return downloaded_scenes
